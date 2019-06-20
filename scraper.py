@@ -39,10 +39,13 @@ def traverse_page(pages):
 
 #ERROR IN BELOW CODE
 def access_following_api(following_api_url,total_following,):
+    counter =0 
     for offset in list(range(0,int(total_following[0]),40)):
         response = requests.get(following_api_url+"?limit=40&offset="+str(offset))
         following = json.loads(response.text)
-        print(following[1]['username']+str(offset))
+        for i in following:
+            counter = counter + 1 
+            print(str(counter) +'   ' +following[index]['username']+str(offset))
     
     
 def main():
