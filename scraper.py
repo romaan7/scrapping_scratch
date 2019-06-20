@@ -37,9 +37,10 @@ def traverse_page(pages):
 #response = requests.get(api_base_url+user_url+user_name_url+following_url+"?limit=40&offset="+offset)
 #following = json.loads(response.text)
 
-def access_api():
+#ERROR IN BELOW CODE
+def access_following_api(following_api_url,total_following,):
     for offset in list(range(0,int(total_following[0]),40)):
-        response = requests.get(api_base_url+user_url+user_name_url+following_url+"?limit=40&offset="+str(offset))
+        response = requests.get(following_api_url+"?limit=40&offset="+str(offset))
         following = json.loads(response.text)
         print(following[1]['username']+str(offset))
     
@@ -80,9 +81,13 @@ def main():
     #Get total following count.
     for i in all_headings:
         total_following = re.findall(r'\d+',i.contents[1])
-
+        
+    print(api_base_url,total_following)
+    
     #traverse_page(pages)
-    #access_api()
+    
+    following_api_url = api_base_url+user_url+user_name_url+following_url # construct URL for calling API
+    access_following_api(following_api_url,total_following)
     
 if __name__ == "__main__" :
     main()
