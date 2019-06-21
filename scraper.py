@@ -43,7 +43,7 @@ def access_following_api(following_api_url,total_following,):
     for offset in list(range(0,int(total_following[0]),40)):
         response = requests.get(following_api_url+"?limit=40&offset="+str(offset))
         following = json.loads(response.text)
-        for i in following:
+        for index,i in enumerate(following):
             counter = counter + 1 
             print(str(counter) +'   ' +following[index]['username']+str(offset))
     
