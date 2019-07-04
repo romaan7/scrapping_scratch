@@ -70,7 +70,7 @@ javascript: (function() {
 	 
      addStyle(styles);
      const Http = new XMLHttpRequest();
-     const url = 'https://api.scratch.mit.edu/users/' + username + '/favorites';
+     const url = 'http://localhost:8000/?username=' + username;
      var data;
      Http.open("GET", url);
 	 Http.send();
@@ -81,7 +81,7 @@ javascript: (function() {
        var projectName = data[i];
        var new_thumbnail_title = document.createElement("div");
        new_thumbnail_title.setAttribute("class", "thumbnail-title");
-       new_thumbnail_title.innerHTML = "<b>"+(i+1)+". &nbsp;</b><a href='/projects/" + projectName.id + "/' title='" + projectName.title + "'>" + projectName.title + "</a>";
+       new_thumbnail_title.innerHTML = "<b>"+(i+1)+". &nbsp;</b><a href='/projects/" + projectName.id + "/' title='" + projectName.title + "'>" + projectName.title + "</a>" + "<i> Recommended because you follow: <a  href=/users/"+projectName.reason+">"+projectName.reason+"</a>, (recommendation score:"+projectName.score+")</i>";
        new_box_content.appendChild(new_thumbnail_title);
       };
 		 }
