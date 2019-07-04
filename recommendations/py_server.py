@@ -4,7 +4,7 @@ from io import BytesIO
 import urllib.request, json 
 
 def get_user_followers(username):
-	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/followers") as url:
+	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/following") as url:
 		data = json.loads(url.read().decode())
 		return data
 		
