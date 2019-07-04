@@ -85,12 +85,10 @@ javascript: (function() {
        new_box_content.appendChild(new_thumbnail_title);
       };
 		 }
+		       container[0].insertBefore(new_box, container[0].firstChild);
+      new_loader_container.style.display = 'none';
      };
 
-     setTimeout(function() {
-      container[0].insertBefore(new_box, container[0].firstChild);
-      new_loader_container.style.display = 'none';
-     }, 3500);
     }
    } else {
     window.alert("You are not on the home page!!.");

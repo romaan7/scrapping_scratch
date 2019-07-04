@@ -93,7 +93,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		
 if __name__ == "__main__":
 	try:
-		#NOTE: If you update port, remember to update in the JS extension as well.
+		#NOTE: If you update port here, remember to update in the JS extension as well.
 		httpd = HTTPServer(('localhost', 8000), SimpleHTTPRequestHandler)
 		print('Started httpserver on port 8000')
 		httpd.serve_forever()
