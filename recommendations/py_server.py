@@ -1,26 +1,36 @@
+#!/usr/bin/python
+#
+# Created on Sat Jul 4 20:31:00 2019
+# Copyright (C) 2019, shaikhr@tcd.ie
+# @author: shaikhr
+#
+
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse,parse_qs
 from io import BytesIO
 import urllib.request, json 
 
-def get_user_followers(username):
+#Returns a list of the users that the specified user has followed.
+def get_user_following(username):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/following") as url:
 		data = json.loads(url.read().decode())
 		return data
-		
+
+#Returns an array of details regarding the projects that a given user has favourited on the website.
 def get_user_favriots(username):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/favorites") as url:
 		data = json.loads(url.read().decode())
 		return data
 
+#Returns an array with information regarding the projects that a given user has shared on the Scratch website.
 def get_user_project(username):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/projects") as url:
 		data = json.loads(url.read().decode())
 		return data
 
-
+#Generates recommendations for a given username, and returns a json object
 def get_recommended_projects(username):
-	all_followers = get_user_followers(username)
+	all_followers = get_user_following(username)
 	all_recommendation=[]
 	for user in all_followers:
 		all_projects = get_user_project(user["username"])
@@ -52,13 +62,14 @@ def get_recommended_projects(username):
 	print(all_recommendation)
 	return json.dumps(all_recommendation)
 	
-
+#Extends pythons simple http server to handle GET requests locally
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 	def end_headers (self):
 		#Required for running locally on chrome
 		self.send_header('Access-Control-Allow-Origin', '*')
 		BaseHTTPRequestHandler.end_headers(self)
-
+	
+	#Gets the username in the GET request url as username and returns a list of recommendations
 	def do_GET(self):
 		self.send_response(200)
 		self.end_headers()
@@ -68,7 +79,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		response.write(b'The username recived in URL is ')
 		response.write(bytes(username, 'utf-8'))
 		self.wfile.write(bytes(get_recommended_projects(username), 'utf-8'))
-
+	
+	#Handels post request, wrote this to get data via POST, not used currently
 	def do_POST(self):
 		content_length = int(self.headers['Content-Length'])
 		body = self.rfile.read(content_length)
@@ -81,6 +93,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		
 if __name__ == "__main__":
 	try:
+		#NOTE: If you update port, remember to update in the JS extension as well.
 		httpd = HTTPServer(('localhost', 8000), SimpleHTTPRequestHandler)
 		print('Started httpserver on port 8000')
 		httpd.serve_forever()
