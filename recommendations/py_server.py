@@ -4,16 +4,29 @@
 # Copyright (C) 2019, shaikhr@tcd.ie
 # @author: shaikhr
 #
-# API reference guide :https://github.com/LLK/scratch-rest-api/wiki/Projects
+# API reference guide : https://github.com/LLK/scratch-rest-api/wiki/Projects
+# Scratch data guide  : https://communitydata.science/scratch-data/
 
+#Libs for Serving
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse,parse_qs
 from io import BytesIO
 import urllib.request, json 
+
+#not required for now can be commented
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import time
 
+#Libs for data analysis
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
+from sklearn import preprocessing
+from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.spatial.distance import correlation
 
 #Returns a list of the users that the specified user has followed.
 def get_user_following(username):
@@ -28,7 +41,7 @@ def get_user_favriots(username):
 		return data
 
 #Returns an array with information regarding the projects that a given user has shared on the Scratch website.
-def get_user_project(username):
+def get_user_projects(username):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/projects") as url:
 		data = json.loads(url.read().decode())
 		return data
@@ -38,6 +51,11 @@ def get_user_project_details(username,project_id):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/projects/"+project_id) as url:
 		data = json.loads(url.read().decode())
 		return data
+
+#Gets the project name from given project ID
+def get_project_title(project_id):
+	with urllib.request.urlopen("https://scratch.mit.edu/projects/"+str(project_id)) as url:
+		return url.read().decode()
 
 # ( No working API, therefor using lxml html parsing)
 def get_author_from_project(project_id):
@@ -55,13 +73,36 @@ def get_author_from_project(project_id):
 	
 #Generates recommendations for a given username, and returns a json object
 def get_recommended_projects(username):
+	RECOMMENDATION_REASON_1 = "<i> Recommended because you follow: <a  href=/users/"
+	RECOMMENDATION_REASON_2 = "<i> Recommended because you have project: <a  href=/projects/"
+	RECOMMENDATION_REASON_3 = "<i> Recommended because user: <a  href=/projects/"
+
 	all_followers = get_user_following(username)
 	all_recommendation=[]
 
-	
+	for projects in get_user_projects(username):
+		project_stats = get_project_stats(projects)
+		project_id = project_stats["id"]
+
+		recommendations_from_db = generate_recommmendation_from_db(reformat_stats(project_stats))
+		recommended_project_ids = recommendations_from_db.keys()
+
+		for recom in recommended_project_ids:
+			#print(get_project_title(recom))
+			recommendations={}
+			recommendations['id'] = recom
+			recommendations['title'] = recom #get_project_title(recom)
+			recommendations['stats'] = project_stats
+			recommendations['score'] = recommendations_from_db[recom]
+			recommendations['reason'] = RECOMMENDATION_REASON_2 + str(project_id) + ">" + str(project_id) + "</a>"
+			recommendations['reason_id'] = username
+			all_recommendation.append(recommendations)
+
 	#Get details of the users who the user is following ( projects of following , favorites of following)
 	for user in all_followers:
-		all_projects = get_user_project(user["username"])
+		
+		#Projects from followers
+		all_projects = get_user_projects(user["username"])
 		for project in all_projects:
 			recommendations={}
 			recommendations['id'] = project["id"]
@@ -70,10 +111,11 @@ def get_recommended_projects(username):
 			recommendations['score'] = 0
 			for s in project["stats"]:
 				recommendations['score'] += project["stats"][s]
-			all_recommendation.append(recommendations)
-			recommendations['reason'] = user["username"]
+			recommendations['reason'] = RECOMMENDATION_REASON_1 + user["username"] + ">" + user["username"] + "</a>"
 			recommendations['reason_id'] = user["id"]
-			
+			all_recommendation.append(recommendations)
+		
+		#Projects that the followers have liked 
 		all_followers_favourite = get_user_favriots(user["username"])
 		for favourite in all_followers_favourite:
 			recommendations={}
@@ -83,9 +125,9 @@ def get_recommended_projects(username):
 			recommendations['score'] = 0
 			for s in project["stats"]:
 				recommendations['score'] += project["stats"][s]		
-			all_recommendation.append(recommendations)
-			recommendations['reason'] = user["username"]
+			recommendations['reason'] = RECOMMENDATION_REASON_3 + user["username"] + ">" + user["username"] + "</a> has liked it."
 			recommendations['reason_id'] = user["id"]
+			all_recommendation.append(recommendations)
 	
 	#Get details of the favorite project of the user ( No working API, therefor using selenium for parsing).
 	#Too slow needs,an alternative
@@ -94,9 +136,90 @@ def get_recommended_projects(username):
 		project_id = favriots["id"]
 		#get_author_from_project(project_id)	
 		
-	print(all_recommendation)
+	#print(all_recommendation)
 	return json.dumps(all_recommendation)
+
+#Takes project json object as input and returns the stats if present.
+def get_project_stats(project_obj):
+	#Difficult to retrive the below values from current APIs therefor assigning mock values.
+	sprites_website = 5
+	scripts_website = 10
+	blocks = 6 
+	block_types = 7
+	images = 2
+	sounds = 2 
+	ugstrings = 11
+	stats = {'sprites_website':sprites_website,'scripts_website':scripts_website,'blocks':blocks,'block_types':block_types,'images':images,'sounds':sounds,'ugstrings':ugstrings}
+	for key in project_obj:
+		if key == 'id':
+			stats['id'] = project_obj[key]
+		if key == 'stats':
+			stats.update(project_obj[key])
+			return stats
+	return stats
+
+def generate_recommmendation_from_db(stats_obj):
+	#Load data from the csv
+	projects_df = pd.read_csv('data/CSVs/projects.csv', sep=',',index_col=0, nrows=100)
+	#index = projects_df.index
+	#columns = projects_df.columns
+	#values = projects_df.values
 	
+	#Filter columns 
+	required_columns_df = projects_df[['viewers_website','lovers_website','downloaders_website','sprites_website','scripts_website', 'blocks', 'block_types', 'images', 'sounds', 'ugstrings']]
+	
+	project_id = stats_obj.pop('id')
+	
+	new_stats_row = pd.Series(stats_obj)
+	new_stats_row.name = project_id
+	required_columns_df = required_columns_df.append(new_stats_row)
+	
+	#Impute the missing values using IterativeImputer from sklearn
+	#imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+	imp = IterativeImputer(max_iter=10,initial_strategy='most_frequent', random_state=0)
+	imputed_DF = pd.DataFrame(imp.fit_transform(required_columns_df))
+	imputed_DF.columns = required_columns_df.columns
+	imputed_DF.index = required_columns_df.index
+	
+	#Normalize the data for further calculation
+	x = imputed_DF.values
+	min_max_scaler = preprocessing.MinMaxScaler()
+	x_scaled = min_max_scaler.fit_transform(imputed_DF)
+	normalised_df = pd.DataFrame(x_scaled)
+	normalised_df.columns = required_columns_df.columns
+	normalised_df.index = required_columns_df.index
+	
+	#Calculate the RMSE score
+	normalised_df['RMSE'] = pd.Series((normalised_df.iloc[:,1:]**2).sum(1).pow(1/2))
+	print(normalised_df)
+
+	#Generate the similarity matrix based on the the new project stats.
+	sim = cosine_similarity(normalised_df)
+	final_df = pd.DataFrame(sim)
+	final_df.columns = required_columns_df.index
+	final_df.index = required_columns_df.index	
+	print(final_df)
+
+	#Get Top 5 from the similarity matrix 
+	top5 = final_df.loc[project_id].nlargest(5)
+	recommendation_pairs = top5.to_dict()
+	
+	return recommendation_pairs
+	
+def calculate_recommendation_score():
+	
+	return True
+	
+#Reformats the stats object in the format required for the recommendation method
+#DICT FORMAT: {'sprites_website': int64(xxx), 'scripts_website': int64(xxx), 'blocks': int64(xxx), 'block_types': int64(xxx), 'images': int64(xxx), 'sounds': int64(xxx), 'ugstrings': int64(xxx), 'viewers_website': int64(xxx), 'lovers_website': int64(xxx), 'downloaders_website': int64(xxx)}
+def reformat_stats(stats_obj):
+	stats_obj['viewers_website'] = stats_obj.pop('views')
+	stats_obj['lovers_website'] = stats_obj.pop('loves')
+	stats_obj['downloaders_website'] = stats_obj.pop('favorites') #Need to fix this
+	stats_obj.pop('comments') 
+	stats_obj.pop('remixes')
+	return stats_obj
+
 #Extends pythons simple http server to handle GET requests locally
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 	def end_headers (self):
@@ -114,6 +237,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		response.write(b'The username recived in URL is ')
 		response.write(bytes(username, 'utf-8'))
 		self.wfile.write(bytes(get_recommended_projects(username), 'utf-8'))
+
 	
 	#Handels post request, wrote this to get data via POST, not used currently
 	def do_POST(self):
@@ -129,8 +253,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
 	try:
 		#NOTE: If you update port here, remember to update in the JS extension as well.
-		httpd = HTTPServer(('localhost', 8000), SimpleHTTPRequestHandler)
-		print('Started httpserver on port 8000')
+		PORT = 8000
+		HOST = 'localhost'
+		httpd = HTTPServer((HOST, PORT), SimpleHTTPRequestHandler)
+		print('Started httpserver on port ' + str(PORT))
 		httpd.serve_forever()
 
 	except KeyboardInterrupt:
