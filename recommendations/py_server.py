@@ -108,9 +108,7 @@ def get_recommended_projects(username):
 			recommendations['id'] = project["id"]
 			recommendations['title'] = project["title"]
 			recommendations['stats'] = project["stats"]
-			recommendations['score'] = 0
-			for s in project["stats"]:
-				recommendations['score'] += project["stats"][s]
+			recommendations['score'] = calculate_recommendation_score(project["stats"])
 			recommendations['reason'] = RECOMMENDATION_REASON_1 + user["username"] + ">" + user["username"] + "</a>"
 			recommendations['reason_id'] = user["id"]
 			all_recommendation.append(recommendations)
@@ -122,9 +120,7 @@ def get_recommended_projects(username):
 			recommendations['id']= favourite["id"]
 			recommendations['title']= favourite["title"]
 			recommendations['stats'] = project["stats"]
-			recommendations['score'] = 0
-			for s in project["stats"]:
-				recommendations['score'] += project["stats"][s]		
+			recommendations['score'] = calculate_recommendation_score(project["stats"])
 			recommendations['reason'] = RECOMMENDATION_REASON_3 + user["username"] + ">" + user["username"] + "</a> has liked it."
 			recommendations['reason_id'] = user["id"]
 			all_recommendation.append(recommendations)
@@ -206,9 +202,10 @@ def generate_recommmendation_from_db(stats_obj):
 	
 	return recommendation_pairs
 	
-def calculate_recommendation_score():
+def calculate_recommendation_score(stats_obj):
+	score = 0
 	
-	return True
+	return score
 	
 #Reformats the stats object in the format required for the recommendation method
 #DICT FORMAT: {'sprites_website': int64(xxx), 'scripts_website': int64(xxx), 'blocks': int64(xxx), 'block_types': int64(xxx), 'images': int64(xxx), 'sounds': int64(xxx), 'ugstrings': int64(xxx), 'viewers_website': int64(xxx), 'lovers_website': int64(xxx), 'downloaders_website': int64(xxx)}
