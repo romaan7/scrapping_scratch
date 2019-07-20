@@ -26,20 +26,22 @@ warnings.filterwarnings('ignore')
 #print(users_df.head())
 
 #Load projects data from csv
-projects_df = pd.read_csv('data/CSVs/projects.csv', sep=',',index_col=0, nrows=100)
-#print(projects_df)
+projects_df = pd.read_csv('data/CSVs/project_blocks.csv', sep=',',index_col=0, nrows=100)
+projects_df = projects_df.drop(columns="other")
+print(projects_df)
 
 index = projects_df.index
 columns = projects_df.columns
 values = projects_df.values
 
-required_columns_df = projects_df[['viewers_website','lovers_website','downloaders_website','sprites_website','scripts_website', 'blocks', 'block_types', 'images', 'sounds', 'ugstrings']]
-new_value = {'sprites_website': 1000, 'scripts_website': 1000, 'blocks': 1000, 'block_types': 1000, 'images': 1000, 'sounds': 1000, 'ugstrings': 1000, 'viewers_website': 1000, 'lovers_website': 1000, 'downloaders_website': 1000}
-n = pd.Series(new_value)
-n.name = 1000001
-new_df = required_columns_df.append(n)
+print(columns)
+#required_columns_df = projects_df[['viewers_website','lovers_website','downloaders_website','sprites_website','scripts_website', 'blocks', 'block_types', 'images', 'sounds', 'ugstrings']]
+#new_value = {'sprites_website': 1000, 'scripts_website': 1000, 'blocks': 1000, 'block_types': 1000, 'images': 1000, 'sounds': 1000, 'ugstrings': 1000, 'viewers_website': 1000, 'lovers_website': 1000, 'downloaders_website': 1000}
+#n = pd.Series(new_value)
+#n.name = 1000001
+#new_df = required_columns_df.append(n)
 
-print(new_df)
+#print(new_df)
 
 #Load galleries data from csv
 #galleries_df = pd.read_csv('data/CSVs/galleries.csv', sep=',')
@@ -73,31 +75,35 @@ print(new_df)
 
 #Impute the missing values using IterativeImputer from sklearn
 #imp = SimpleImputer(missing_values=np.nan, strategy='mean')
-imp = IterativeImputer(max_iter=10,initial_strategy='most_frequent', random_state=0)
-imputed_DF = pd.DataFrame(imp.fit_transform(new_df))
-imputed_DF.columns = new_df.columns
-imputed_DF.index = new_df.index
+#imp = IterativeImputer(max_iter=10,initial_strategy='most_frequent', random_state=0)
+#imputed_DF = pd.DataFrame(imp.fit_transform(new_df))
+#imputed_DF.columns = new_df.columns
+#imputed_DF.index = new_df.index
 
 #Normalize the data for further calculation
-x = imputed_DF.values
-min_max_scaler = preprocessing.MinMaxScaler()
-x_scaled = min_max_scaler.fit_transform(imputed_DF)
-df = pd.DataFrame(x_scaled)
-df.columns = imputed_DF.columns
-df.index = imputed_DF.index
+#x = imputed_DF.values
+#min_max_scaler = preprocessing.MinMaxScaler()
+#x_scaled = min_max_scaler.fit_transform(imputed_DF)
+#df = pd.DataFrame(x_scaled)
+#df.columns = imputed_DF.columns
+#df.index = imputed_DF.index
 
 
 #Calculate the RMSE score
-df['RMSE'] = pd.Series((df.iloc[:,1:]**2).sum(1).pow(1/2))
-sim = cosine_similarity(df)
+#df['RMSE'] = pd.Series((df.iloc[:,1:]**2).sum(1).pow(1/2))
+#sim = cosine_similarity(df)
+sim = cosine_similarity(projects_df)
 df1 = pd.DataFrame(sim)
-df1.columns = df.index
-df1.index = df.index
+df1.columns = projects_df.index
+df1.index = projects_df.index
 
 df1.to_csv('Cosine_similarity_output.csv')
+print(df1.iloc[1].nlargest(5))
+
+print(projects_df.loc[[2437735,2437714]])
+projects_df.loc[[2437735,2437714]].to_csv('compare.csv')
 
 top5 = df1.loc[1000001].nlargest(5)
-print(df1)
 print(df1.loc[1000001].sort_values())
 print(top5.index.values.tolist())
 
