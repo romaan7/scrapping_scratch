@@ -70,70 +70,6 @@ def get_author_from_project(project_id):
 	author = driver.find_element_by_xpath("//div[@class='title']/a").text
 	driver.quit()
 	return author
-	
-#Generates recommendations for a given username, and returns a json object
-def get_recommended_projects(username):
-	RECOMMENDATION_REASON_1 = "<i> Recommended because you follow: <a  href=/users/"
-	RECOMMENDATION_REASON_2 = "<i> Recommended because you have project: <a  href=/projects/"
-	RECOMMENDATION_REASON_3 = "<i> Recommended because user: <a  href=/projects/"
-
-	all_followers = get_user_following(username)
-	all_recommendation=[]
-
-	for projects in get_user_projects(username):
-		project_stats = get_project_stats(projects)
-		project_id = project_stats["id"]
-
-		recommendations_from_db = generate_recommmendation_from_db(reformat_stats(project_stats))
-		recommended_project_ids = recommendations_from_db.keys()
-
-		for recom in recommended_project_ids:
-			#print(get_project_title(recom))
-			recommendations={}
-			recommendations['id'] = recom
-			recommendations['title'] = recom #get_project_title(recom)
-			recommendations['stats'] = project_stats
-			recommendations['score'] = recommendations_from_db[recom]
-			recommendations['reason'] = RECOMMENDATION_REASON_2 + str(project_id) + ">" + str(project_id) + "</a>"
-			recommendations['reason_id'] = username
-			all_recommendation.append(recommendations)
-
-	#Get details of the users who the user is following ( projects of following , favorites of following)
-	for user in all_followers:
-		
-		#Projects from followers
-		all_projects = get_user_projects(user["username"])
-		for project in all_projects:
-			recommendations={}
-			recommendations['id'] = project["id"]
-			recommendations['title'] = project["title"]
-			recommendations['stats'] = project["stats"]
-			recommendations['score'] = calculate_recommendation_score(project["stats"])
-			recommendations['reason'] = RECOMMENDATION_REASON_1 + user["username"] + ">" + user["username"] + "</a>"
-			recommendations['reason_id'] = user["id"]
-			all_recommendation.append(recommendations)
-		
-		#Projects that the followers have liked 
-		all_followers_favourite = get_user_favriots(user["username"])
-		for favourite in all_followers_favourite:
-			recommendations={}
-			recommendations['id']= favourite["id"]
-			recommendations['title']= favourite["title"]
-			recommendations['stats'] = project["stats"]
-			recommendations['score'] = calculate_recommendation_score(project["stats"])
-			recommendations['reason'] = RECOMMENDATION_REASON_3 + user["username"] + ">" + user["username"] + "</a> has liked it."
-			recommendations['reason_id'] = user["id"]
-			all_recommendation.append(recommendations)
-	
-	#Get details of the favorite project of the user ( No working API, therefor using selenium for parsing).
-	#Too slow needs,an alternative
-	all_favriots = get_user_favriots(username)
-	for favriots in all_favriots:
-		project_id = favriots["id"]
-		#get_author_from_project(project_id)	
-		
-	#print(all_recommendation)
-	return json.dumps(all_recommendation)
 
 #Takes project json object as input and returns the stats if present.
 def get_project_stats(project_obj):
@@ -201,11 +137,54 @@ def generate_recommmendation_from_db(stats_obj):
 	recommendation_pairs = top5.to_dict()
 	
 	return recommendation_pairs
+
 	
+#Calculates recommendation score by taking the mean of the generated recommendation matrix based on provided input stats of the project.
+#Need more optimized method to calculate more accurate score. Currently needs work.
 def calculate_recommendation_score(stats_obj):
-	score = 0
+	projects_df = pd.read_csv('data/CSVs/projects.csv', sep=',',index_col=0, nrows=100)
 	
-	return score
+	#Filter columns 
+	required_columns_df = projects_df[['viewers_website','lovers_website','downloaders_website','sprites_website','scripts_website', 'blocks', 'block_types', 'images', 'sounds', 'ugstrings']]
+	
+	#project_id = stats_obj.pop('id')
+	project_id = '10000001'
+	
+	new_stats_row = pd.Series(stats_obj)
+	new_stats_row.name = project_id
+	required_columns_df = required_columns_df.append(new_stats_row)
+	
+	#Impute the missing values using IterativeImputer from sklearn
+	#imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+	imp = IterativeImputer(max_iter=10,initial_strategy='most_frequent', random_state=0)
+	imputed_DF = pd.DataFrame(imp.fit_transform(required_columns_df))
+	imputed_DF.columns = required_columns_df.columns
+	imputed_DF.index = required_columns_df.index
+	
+	#Normalize the data for further calculation
+	x = imputed_DF.values
+	min_max_scaler = preprocessing.MinMaxScaler()
+	x_scaled = min_max_scaler.fit_transform(imputed_DF)
+	normalised_df = pd.DataFrame(x_scaled)
+	normalised_df.columns = required_columns_df.columns
+	normalised_df.index = required_columns_df.index
+	
+	#Calculate the RMSE score
+	normalised_df['RMSE'] = pd.Series((normalised_df.iloc[:,1:]**2).sum(1).pow(1/2))
+
+	#Generate the similarity matrix based on the the new project stats.
+	sim = cosine_similarity(normalised_df)
+	final_df = pd.DataFrame(sim)
+	final_df.columns = required_columns_df.index
+	final_df.index = required_columns_df.index	
+
+	score = final_df.loc[project_id].nlargest(5)
+	final_score = 0
+	for x in score:
+		final_score += x
+
+	return final_score/5
+
 	
 #Reformats the stats object in the format required for the recommendation method
 #DICT FORMAT: {'sprites_website': int64(xxx), 'scripts_website': int64(xxx), 'blocks': int64(xxx), 'block_types': int64(xxx), 'images': int64(xxx), 'sounds': int64(xxx), 'ugstrings': int64(xxx), 'viewers_website': int64(xxx), 'lovers_website': int64(xxx), 'downloaders_website': int64(xxx)}
@@ -216,7 +195,74 @@ def reformat_stats(stats_obj):
 	stats_obj.pop('comments') 
 	stats_obj.pop('remixes')
 	return stats_obj
+	
+	
+#Generates recommendations for a given username, and returns a json object
+def get_recommended_projects(username):
+	RECOMMENDATION_REASON_1 = "<i> Recommended because you follow: <a  href=/users/"
+	RECOMMENDATION_REASON_2 = "<i> Recommended because you have project: <a  href=/projects/"
+	RECOMMENDATION_REASON_3 = "<i> Recommended because user: <a  href=/projects/"
 
+	all_followers = get_user_following(username)
+	all_recommendation=[]
+
+	#Gets recommendation from the csv database against the given user data
+	for projects in get_user_projects(username):
+		project_stats = get_project_stats(projects)
+		project_id = project_stats["id"]
+
+		recommendations_from_db = generate_recommmendation_from_db(reformat_stats(project_stats))
+		recommended_project_ids = recommendations_from_db.keys()
+
+		for recom in recommended_project_ids:
+			#print(get_project_title(recom))
+			recommendations={}
+			recommendations['id'] = recom
+			recommendations['title'] = recom #get_project_title(recom)
+			recommendations['stats'] = project_stats
+			recommendations['score'] = recommendations_from_db[recom]
+			recommendations['reason'] = RECOMMENDATION_REASON_2 + str(project_id) + ">" + str(project_id) + "</a>"
+			recommendations['reason_id'] = username
+			all_recommendation.append(recommendations)
+
+	#Get details of the users who the user is following ( projects of following , favorites of following)
+	for user in all_followers:
+		
+		#Projects from followers
+		all_projects = get_user_projects(user["username"])
+		for project in all_projects:
+			recommendations={}
+			recommendations['id'] = project["id"]
+			recommendations['title'] = project["title"]
+			recommendations['stats'] = project["stats"]
+			recommendations['score'] = calculate_recommendation_score(project["stats"])
+			recommendations['reason'] = RECOMMENDATION_REASON_1 + user["username"] + ">" + user["username"] + "</a>"
+			recommendations['reason_id'] = user["id"]
+			all_recommendation.append(recommendations)
+		
+		#Projects that the followers have liked 
+		all_followers_favourite = get_user_favriots(user["username"])
+		for favourite in all_followers_favourite:
+			recommendations={}
+			recommendations['id']= favourite["id"]
+			recommendations['title']= favourite["title"]
+			recommendations['stats'] = project["stats"]
+			recommendations['score'] = calculate_recommendation_score(project["stats"])
+			recommendations['reason'] = RECOMMENDATION_REASON_3 + user["username"] + ">" + user["username"] + "</a> has liked it."
+			recommendations['reason_id'] = user["id"]
+			all_recommendation.append(recommendations)
+	
+	#Get details of the favorite project of the user ( No working API, therefor using selenium for parsing).
+	#Too slow needs,an alternative
+	all_favriots = get_user_favriots(username)
+	for favriots in all_favriots:
+		project_id = favriots["id"]
+		#get_author_from_project(project_id)	
+		
+	#print(all_recommendation)
+	return json.dumps(all_recommendation)
+	
+	
 #Extends pythons simple http server to handle GET requests locally
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 	def end_headers (self):
@@ -259,5 +305,3 @@ if __name__ == "__main__":
 	except KeyboardInterrupt:
 		print( '^C received, shutting down the web server')
 		httpd.socket.close()
-	
-	
