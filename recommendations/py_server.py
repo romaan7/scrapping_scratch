@@ -72,7 +72,7 @@ def get_project_title(project_id):
 	#rendered page is a JS script, no use of lxml #alternative is using selenium
 	chrome_options = Options()
 	chrome_options.add_argument("--headless")
-	driver = webdriver.Chrome('./selenium/chromedriver.exe',chrome_options=chrome_options)  # Optional argument, if not specified will search path.
+	driver = webdriver.Chrome('./selenium/chromedriver',chrome_options=chrome_options)  # Optional argument, if not specified will search path.
 	#driver = webdriver.Chrome('./selenium/chromedriver.exe')
 	driver.get(url)
 	time.sleep(5)
@@ -257,10 +257,9 @@ def get_recommended_projects(username):
 		recommended_project_ids = recommendations_from_db.keys()
 
 		for recom in recommended_project_ids:
-			print(get_project_title(recom))
 			recommendations={}
 			recommendations['id'] = recom
-			recommendations['title'] = recom #get_project_title(recom)
+			recommendations['title'] = recom #get_project_title(recom)----->replace for getting actual name of the project  insted of the ID but very slow because of selenium call
 			recommendations['stats'] = project_stats
 			recommendations['score'] = recommendations_from_db[recom]
 			recommendations['reason'] = RECOMMENDATION_REASON_2 + str(project_id) + ">" + str(project_id) + "</a>"
