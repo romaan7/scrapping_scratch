@@ -30,22 +30,31 @@ from scipy.spatial.distance import correlation
 
 
 #Returns a list of the users that the specified user has followed.
-def get_user_following(username):
-	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/following") as url:
+def get_user_following(username, LIMIT):
+	if not LIMIT:
+		LIMIT = 10
+	OFFSET = 0
+	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/following?limit="+str(LIMIT)+"&offset="+str(OFFSET)) as url:
 		data = json.loads(url.read().decode())
 		return data
 
 		
 #Returns an array of details regarding the projects that a given user has favourited on the website.
-def get_user_favriots(username):
-	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/favorites") as url:
+def get_user_favriots(username, LIMIT):
+	if not LIMIT:
+		LIMIT = 3
+	OFFSET = 0
+	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/favorites?limit="+str(LIMIT)+"&offset="+str(OFFSET)) as url:
 		data = json.loads(url.read().decode())
 		return data
 
 		
 #Returns an array with information regarding the projects that a given user has shared on the Scratch website.
-def get_user_projects(username):
-	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/projects") as url:
+def get_user_projects(username, LIMIT):
+	if not LIMIT:
+		LIMIT = 10
+	OFFSET = 0
+	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/projects?limit="+str(LIMIT)+"&offset="+str(OFFSET)) as url:
 		data = json.loads(url.read().decode())
 		return data
 
@@ -57,10 +66,19 @@ def get_user_project_details(username,project_id):
 		return data
 
 		
-#Gets the project name from given project ID
+#Gets the project name from given project ID (api deprecated , using selenium to render JS)
 def get_project_title(project_id):
-	with urllib.request.urlopen("https://scratch.mit.edu/projects/"+str(project_id)) as url:
-		return url.read().decode()
+	url = 'https://scratch.mit.edu/projects/'+str(project_id)
+	#rendered page is a JS script, no use of lxml #alternative is using selenium
+	chrome_options = Options()
+	chrome_options.add_argument("--headless")
+	driver = webdriver.Chrome('./selenium/chromedriver.exe',chrome_options=chrome_options)  # Optional argument, if not specified will search path.
+	#driver = webdriver.Chrome('./selenium/chromedriver.exe')
+	driver.get(url)
+	time.sleep(5)
+	title = driver.title
+	driver.quit()
+	return title
 
 
 # ( No working API, therefor using lxml html parsing)
@@ -227,11 +245,11 @@ def get_recommended_projects(username):
 	RECOMMENDATION_REASON_3 = "<i> Recommended because user: <a  href=/projects/"
 	RECOMMENDATION_REASON_4 = "<i> Recommended because its a remix of <a  href=/projects/"
 
-	all_followers = get_user_following(username)
+	all_followers = get_user_following(username,10)
 	all_recommendation = []
 
 	#Gets recommendation from the csv database against the given user data
-	for projects in get_user_projects(username):
+	for projects in get_user_projects(username,5):
 		project_stats = get_project_stats(projects)
 		project_id = project_stats["id"]
 
@@ -239,7 +257,7 @@ def get_recommended_projects(username):
 		recommended_project_ids = recommendations_from_db.keys()
 
 		for recom in recommended_project_ids:
-			#print(get_project_title(recom))
+			print(get_project_title(recom))
 			recommendations={}
 			recommendations['id'] = recom
 			recommendations['title'] = recom #get_project_title(recom)
@@ -253,7 +271,7 @@ def get_recommended_projects(username):
 	for user in all_followers:
 		
 		#Projects from followers
-		all_follower_projects = get_user_projects(user["username"])
+		all_follower_projects = get_user_projects(user["username"],5)
 		for project in all_follower_projects:
 			recommendations={}
 			recommendations['id'] = project["id"]
@@ -265,7 +283,7 @@ def get_recommended_projects(username):
 			all_recommendation.append(recommendations)
 		
 		#Projects that the followers have liked 
-		all_followers_favourite = get_user_favriots(user["username"])
+		all_followers_favourite = get_user_favriots(user["username"],5)
 		for favourite in all_followers_favourite:
 			recommendations={}
 			recommendations['id']= favourite["id"]
@@ -277,9 +295,8 @@ def get_recommended_projects(username):
 			all_recommendation.append(recommendations)
 		
 		#Check if project has remix of the project, and add that to the recommendation list.
-		for project in all_follower_projects:
+		for project in get_user_projects(user["username"],5):
 			is_remix = is_project_remix(project)
-			print(is_remix)
 			if is_remix:
 				recommendations={}
 				recommendations['id']= is_remix["parent"]
@@ -292,7 +309,7 @@ def get_recommended_projects(username):
 				
 	#Get details of the favorite project of the user ( No working API, therefor using selenium for parsing).
 	#Too slow needs,an alternative
-	all_favriots = get_user_favriots(username)
+	all_favriots = get_user_favriots(username,5)
 	for favriots in all_favriots:
 		project_id = favriots["id"]
 		#get_author_from_project(project_id)	
