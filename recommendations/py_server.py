@@ -28,34 +28,40 @@ from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.spatial.distance import correlation
 
+
 #Returns a list of the users that the specified user has followed.
 def get_user_following(username):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/following") as url:
 		data = json.loads(url.read().decode())
 		return data
 
+		
 #Returns an array of details regarding the projects that a given user has favourited on the website.
 def get_user_favriots(username):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/favorites") as url:
 		data = json.loads(url.read().decode())
 		return data
 
+		
 #Returns an array with information regarding the projects that a given user has shared on the Scratch website.
 def get_user_projects(username):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/projects") as url:
 		data = json.loads(url.read().decode())
 		return data
 
+		
 #Returns an array with information regarding the project with provided ID of particular username (dosent work , requires auth)
 def get_user_project_details(username,project_id):
 	with urllib.request.urlopen("https://api.scratch.mit.edu/users/"+username+"/projects/"+project_id) as url:
 		data = json.loads(url.read().decode())
 		return data
 
+		
 #Gets the project name from given project ID
 def get_project_title(project_id):
 	with urllib.request.urlopen("https://scratch.mit.edu/projects/"+str(project_id)) as url:
 		return url.read().decode()
+
 
 # ( No working API, therefor using lxml html parsing)
 def get_author_from_project(project_id):
@@ -71,6 +77,7 @@ def get_author_from_project(project_id):
 	driver.quit()
 	return author
 
+	
 #Takes project json object as input and returns the stats if present.
 def get_project_stats(project_obj):
 	#Difficult to retrive the below values from current APIs therefor assigning mock values.
@@ -90,6 +97,20 @@ def get_project_stats(project_obj):
 			return stats
 	return stats
 
+	
+#Checks if the supplied project has a remix associated with it. If yes returns the remix object containing the remixes 
+def is_project_remix(project_obj):
+	for key in project_obj:
+		if key == 'remix':
+			#Nested for not too heavy because only 2 remix has only two components
+			for x in project_obj[key]:
+				if project_obj[key][x] != None:
+					return project_obj[key]
+				else:
+					return False
+
+
+#Gets from the CSV database against the supplies stats of the project
 def generate_recommmendation_from_db(stats_obj):
 	#Load data from the csv
 	projects_df = pd.read_csv('data/CSVs/projects.csv', sep=',',index_col=0, nrows=100)
@@ -140,8 +161,10 @@ def generate_recommmendation_from_db(stats_obj):
 
 	
 #Calculates recommendation score by taking the mean of the generated recommendation matrix based on provided input stats of the project.
-#Need more optimized method to calculate more accurate score. Currently needs work.
+#Need more optimized method to calculate more accurate score. Currently needs work.( Probably apply K nearest neighbor technique to get nearest neighbor and calculate further score.
 def calculate_recommendation_score(stats_obj):
+	MAX_ITER = 10
+	RECOMMENDATION_NUMBER = 5
 	projects_df = pd.read_csv('data/CSVs/projects.csv', sep=',',index_col=0, nrows=100)
 	
 	#Filter columns 
@@ -156,7 +179,7 @@ def calculate_recommendation_score(stats_obj):
 	
 	#Impute the missing values using IterativeImputer from sklearn
 	#imp = SimpleImputer(missing_values=np.nan, strategy='mean')
-	imp = IterativeImputer(max_iter=10,initial_strategy='most_frequent', random_state=0)
+	imp = IterativeImputer(max_iter=MAX_ITER,initial_strategy='most_frequent', random_state=0)
 	imputed_DF = pd.DataFrame(imp.fit_transform(required_columns_df))
 	imputed_DF.columns = required_columns_df.columns
 	imputed_DF.index = required_columns_df.index
@@ -178,12 +201,12 @@ def calculate_recommendation_score(stats_obj):
 	final_df.columns = required_columns_df.index
 	final_df.index = required_columns_df.index	
 
-	score = final_df.loc[project_id].nlargest(5)
+	score = final_df.loc[project_id].nlargest(RECOMMENDATION_NUMBER)
 	final_score = 0
 	for x in score:
 		final_score += x
 
-	return final_score/5
+	return final_score/RECOMMENDATION_NUMBER
 
 	
 #Reformats the stats object in the format required for the recommendation method
@@ -202,9 +225,10 @@ def get_recommended_projects(username):
 	RECOMMENDATION_REASON_1 = "<i> Recommended because you follow: <a  href=/users/"
 	RECOMMENDATION_REASON_2 = "<i> Recommended because you have project: <a  href=/projects/"
 	RECOMMENDATION_REASON_3 = "<i> Recommended because user: <a  href=/projects/"
+	RECOMMENDATION_REASON_4 = "<i> Recommended because its a remix of <a  href=/projects/"
 
 	all_followers = get_user_following(username)
-	all_recommendation=[]
+	all_recommendation = []
 
 	#Gets recommendation from the csv database against the given user data
 	for projects in get_user_projects(username):
@@ -229,8 +253,8 @@ def get_recommended_projects(username):
 	for user in all_followers:
 		
 		#Projects from followers
-		all_projects = get_user_projects(user["username"])
-		for project in all_projects:
+		all_follower_projects = get_user_projects(user["username"])
+		for project in all_follower_projects:
 			recommendations={}
 			recommendations['id'] = project["id"]
 			recommendations['title'] = project["title"]
@@ -246,12 +270,26 @@ def get_recommended_projects(username):
 			recommendations={}
 			recommendations['id']= favourite["id"]
 			recommendations['title']= favourite["title"]
-			recommendations['stats'] = project["stats"]
-			recommendations['score'] = calculate_recommendation_score(project["stats"])
+			recommendations['stats'] = favourite["stats"]
+			recommendations['score'] = calculate_recommendation_score(favourite["stats"])
 			recommendations['reason'] = RECOMMENDATION_REASON_3 + user["username"] + ">" + user["username"] + "</a> has liked it."
 			recommendations['reason_id'] = user["id"]
 			all_recommendation.append(recommendations)
-	
+		
+		#Check if project has remix of the project, and add that to the recommendation list.
+		for project in all_follower_projects:
+			is_remix = is_project_remix(project)
+			print(is_remix)
+			if is_remix:
+				recommendations={}
+				recommendations['id']= is_remix["parent"]
+				recommendations['title']= project["title"]
+				recommendations['stats'] = project["stats"]
+				recommendations['score'] = calculate_recommendation_score(project["stats"])
+				recommendations['reason'] = RECOMMENDATION_REASON_4 + str(is_remix["root"]) + ">" + str(is_remix["root"]) + "</a>"
+				recommendations['reason_id'] = user["id"]
+				all_recommendation.append(recommendations)
+				
 	#Get details of the favorite project of the user ( No working API, therefor using selenium for parsing).
 	#Too slow needs,an alternative
 	all_favriots = get_user_favriots(username)
@@ -292,7 +330,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 		response.write(b'This is POST request. ')
 		response.write(body)
 		self.wfile.write(response.getvalue())
-		
+
+
 if __name__ == "__main__":
 	try:
 		#NOTE: If you update port here, remember to update in the JS extension as well.
