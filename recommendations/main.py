@@ -30,6 +30,12 @@ projects_df = pd.read_csv('data/CSVs/project_blocks.csv', sep=',',index_col=0, n
 projects_df = projects_df.drop(columns="other")
 print(projects_df)
 
+galleries_df = pd.read_csv('data/CSVs/project_sprites.csv', sep=',',index_col=0)
+print(galleries_df.head())
+
+main_frame = pd.merge(projects_df, galleries_df, left_index=True, right_index=True)
+print(main_frame)
+
 index = projects_df.index
 columns = projects_df.columns
 values = projects_df.values
@@ -92,16 +98,16 @@ print(columns)
 #Calculate the RMSE score
 #df['RMSE'] = pd.Series((df.iloc[:,1:]**2).sum(1).pow(1/2))
 #sim = cosine_similarity(df)
-sim = cosine_similarity(projects_df)
+sim = cosine_similarity(main_frame)
 df1 = pd.DataFrame(sim)
-df1.columns = projects_df.index
-df1.index = projects_df.index
+df1.columns = main_frame.index
+df1.index = main_frame.index
 
 df1.to_csv('Cosine_similarity_output.csv')
 print(df1.iloc[1].nlargest(5))
 
-print(projects_df.loc[[2437735,2437714]])
-projects_df.loc[[2437735,2437714]].to_csv('compare.csv')
+print(main_frame.loc[[2437735,2437714]])
+main_frame.loc[[2437735,2437714]].to_csv('compare.csv')
 
 top5 = df1.loc[1000001].nlargest(5)
 print(df1.loc[1000001].sort_values())
