@@ -15,6 +15,7 @@ from sklearn.impute import IterativeImputer
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.spatial.distance import correlation
+from scipy.stats.stats import pearsonr
 
 import warnings
 
@@ -98,10 +99,16 @@ print(columns)
 #Calculate the RMSE score
 #df['RMSE'] = pd.Series((df.iloc[:,1:]**2).sum(1).pow(1/2))
 #sim = cosine_similarity(df)
+
+#Calculate cosine similarity
 sim = cosine_similarity(main_frame)
 df1 = pd.DataFrame(sim)
 df1.columns = main_frame.index
 df1.index = main_frame.index
+
+#Calculate person correlation.
+print(df1.corr(method='pearson'))
+
 
 df1.to_csv('Cosine_similarity_output.csv')
 print(df1.iloc[1].nlargest(5))
